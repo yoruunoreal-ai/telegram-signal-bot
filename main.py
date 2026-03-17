@@ -42,11 +42,40 @@ def format_signal(text):
     return formatted.strip()
 
 @client.on(events.NewMessage(chats=source_group))
-async def forward_signal(event):
+async def handle_message(event):
     text = event.message.text
-    if text and ('SELL' in text.upper() or 'BUY' in text.upper()):
-        new_text = format_signal(text)
-        await client.send_message(target_group, new_text)
+
+    if not text:
+        return
+
+    text_clean = re.sub(r'[^\x00-\x7F]+', '', text)
+
+    # =========================
+    # 📈 NUOVO SEGNALE
+    # =========================
+    if 'SELL' in text_clean.upper() or 'BUY' in text_clean.upper():
+        new_text = format_signal(text_clean)
+
+        sent_msg = await client.send_message(target_group, new_text)
+
+        # 🔥 salva mapping ID sorgente → ID target
+        message_map[event.message.id] = sent_msg.id
+
+    # =========================
+    # 🎯 REPLY (TP, SL, BE ecc)
+    # =========================
+    elif event.message.reply_to_msg_id:
+        original_id = event.message.reply_to_msg_id
+
+        # controlla se abbiamo quel messaggio salvato
+        if original_id in message_map:
+            target_reply_id = message_map[original_id]
+
+            await client.send_message(
+                target_group,
+                text_clean,
+                reply_to=target_reply_id
+            )
 
 print("Bot avviato...")
 
